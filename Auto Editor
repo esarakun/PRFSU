@@ -1,0 +1,60 @@
+import spacy
+from transformers import pipeline
+from textblob import TextBlob
+import requests
+
+# Load spaCy model for NER and dependency parsing
+nlp = spacy.load('en_core_web_sm')
+
+# Load Hugging Face model for sentiment analysis
+sentiment_analyzer = pipeline('sentiment-analysis')
+
+# Define bias indicators (example list, can be expanded)
+bias_indicators = ['best', 'worst', 'always', 'never', 'everyone', 'nobody', 'obviously', 'clearly']
+
+# Function to check facts using Google Fact Check Tools API
+def fact_check(statement):
+    api_key = 'YOUR_API_KEY'  # Replace with your API key
+    url = f'https://factchecktools.googleapis.com/v1alpha1/claims:search?query={statement}&key={api_key}'
+    response = requests.get(url)
+    return response.json()
+
+# Function to detect and highlight bias
+def detect_and_highlight_bias(text):
+    doc = nlp(text)
+    for token in doc:
+        if token.dep_ in ('amod', 'advmod') and token.text.lower() in bias_indicators:
+            text = text.replace(token.text, f'**{token.text}**')
+    return text
+
+# Function to perform sentiment analysis
+def analyze_sentiment(text):
+    sentiment = sentiment_analyzer(text)
+    return sentiment[0]['label'], sentiment[0]['score']
+
+def apply_ap_style_rules(text):
+    # Example placeholder for AP Style rules
+    text = text.replace(' e.g. ', ' for example, ')
+    text = text.replace(' i.e. ', ' that is, ')
+    # Add more AP Style rules as needed
+    return text
+
+def apply_additional_rules(text):
+    text = detect_and_highlight_bias(text)
+    sentiment_label, sentiment_score = analyze_sentiment(text)
+    text += f"\n\n[Sentiment Analysis: {sentiment_label} ({sentiment_score})]"
+    facts = fact_check(text)
+    if 'claims' in facts and facts['claims']:
+        text += f"\n\n[Fact Check: {facts['claims'][0]['textualRating']}]"
+    return text
+
+def apply_rules(text):
+    text = apply_ap_style_rules(text)
+    text = apply_additional_rules(text)
+    return text
+
+# Example usage
+article = "The new policy is the best solution to our problems. Everyone agrees that it's obviously the worst crisis we have faced."
+
+corrected_article = apply_rules(article)
+print(corrected_article)
